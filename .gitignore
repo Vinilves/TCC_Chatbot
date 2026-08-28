@@ -14,3 +14,9 @@ Thumbs.db
 
 # Índices FAISS
 *.index
+
+# Arquivo .env
+.env
+
+# Arquivos de texto
+*.txt
