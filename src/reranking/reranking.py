@@ -1,41 +1,127 @@
+import re
+import unicodedata
+
+from rank_bm25 import BM25Okapi
+
 from src.preprocessing.scope import extract_python_terms
 
 
-def rerank_candidates(question: str, candidates: list, similarities):
+def normalize_for_bm25(text: str) -> str:
 
-    python_terms = extract_python_terms(question)
+    text = text.lower().strip()
 
-    ranked_candidates = []
+    text = unicodedata.normalize(
+        "NFD",
+        text
+    )
 
-    for candidate, similarity in zip(candidates, similarities):
+    text = "".join(
+        character
+        for character in text
+        if unicodedata.category(character) != "Mn"
+    )
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
+
+    return text
+
+
+def tokenize_for_bm25(text: str, python_terms=None):
+
+    text = normalize_for_bm25(text)
+
+    if python_terms:
+
+        normalized_terms = sorted(
+            (
+                normalize_for_bm25(term)
+                for term in python_terms
+            ),
+            key=len,
+            reverse=True
+        )
+
+        for term in normalized_terms:
+
+            tokenized_term = term.replace(
+                " ",
+                "_"
+            )
+
+            pattern = (
+                r"(?<!\w)"
+                + re.escape(term)
+                + r"(?!\w)"
+            )
+
+            text = re.sub(
+                pattern,
+                tokenized_term,
+                text
+            )
+
+    return re.findall(
+        r"\b\w+\b",
+        text
+    )
+
+
+def rerank_candidates(question, candidates, similarities):
+
+    if not candidates:
+        return []
+
+    question_terms = extract_python_terms(question)
+
+    question_tokens = tokenize_for_bm25(
+        question,
+        question_terms
+    )
+
+    corpus = []
+
+    for candidate in candidates:
 
         candidate_question = candidate[1]
 
-        question_lower = candidate_question.lower()
-
-        term_match = any(
-            term.lower() in question_lower
-            for term in python_terms
+        candidate_terms = extract_python_terms(
+            candidate_question
         )
 
-        similarity = float(similarity)
+        candidate_tokens = tokenize_for_bm25(
+            candidate_question,
+            candidate_terms
+        )
 
-        score = similarity
+        corpus.append(candidate_tokens)
 
-        if term_match:
-            score += 0.10
+    bm25 = BM25Okapi(corpus)
 
-        ranked_candidates.append(
+    bm25_scores = bm25.get_scores(question_tokens)
+
+    results = []
+
+    for candidate, similarity, bm25_score in zip(
+        candidates,
+        similarities,
+        bm25_scores
+    ):
+
+        results.append(
             (
-                score,
-                similarity,
+                float(bm25_score),
+                float(similarity),
                 candidate
             )
         )
 
-    ranked_candidates.sort(
+    results.sort(
         key=lambda x: x[0],
         reverse=True
     )
 
-    return ranked_candidates
+    return results
