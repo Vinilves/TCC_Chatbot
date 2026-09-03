@@ -131,7 +131,7 @@ def to_respond(question: str, session_id: str):
         similarities
     )
 
-    _, best_similarity, best_candidate = ranked_candidates[0]
+    best_score, best_similarity, best_candidate = ranked_candidates[0]
 
     record_id = best_candidate[0]
     found_question = best_candidate[1]
@@ -192,5 +192,6 @@ def to_respond(question: str, session_id: str):
         "code": code,
         "source": source,
         "language": language,
-        "similarity": best_similarity
+        "similarity": best_similarity,
+        "reranking_score": best_score
     }
