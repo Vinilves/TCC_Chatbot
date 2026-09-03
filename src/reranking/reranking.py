@@ -4,6 +4,7 @@ import unicodedata
 from rank_bm25 import BM25Okapi
 
 from src.preprocessing.scope import extract_python_terms
+from src.preprocessing.stopwords import STOPWORDS_PT
 
 
 PYTHON_SYNTAX_PATTERN = (
@@ -15,7 +16,10 @@ def normalize_for_bm25(text: str) -> str:
 
     text = text.lower().strip()
 
-    text = unicodedata.normalize("NFD", text)
+    text = unicodedata.normalize(
+        "NFD",
+        text
+    )
 
     text = "".join(
         character
@@ -23,7 +27,11 @@ def normalize_for_bm25(text: str) -> str:
         if unicodedata.category(character) != "Mn"
     )
 
-    text = re.sub(r"\s+", " ", text)
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
 
     return text
 
@@ -84,6 +92,12 @@ def tokenize_for_bm25(text: str, python_terms=None):
         text_without_syntax
     )
 
+    tokens = [
+        token
+        for token in tokens
+        if token not in STOPWORDS_PT
+    ]
+
     tokens.extend(python_syntax)
 
     return tokens
@@ -103,10 +117,7 @@ def normalize_scores(scores):
     max_score = max(scores)
 
     if max_score == min_score:
-        return [
-            1.0
-            for _ in scores
-        ]
+        return [1.0 for _ in scores]
 
     return [
         (score - min_score) / (max_score - min_score)
@@ -151,7 +162,10 @@ def rerank_candidates(question, candidates, similarities):
 
     bm25_scores = bm25.get_scores(question_tokens)
 
-    semantic_scores = normalize_scores(similarities)
+    semantic_scores = [
+        float(score)
+        for score in similarities
+    ]
 
     lexical_scores = normalize_scores(bm25_scores)
 
@@ -162,6 +176,14 @@ def rerank_candidates(question, candidates, similarities):
         for index, syntax in enumerate(candidate_syntax):
 
             if question_syntax.intersection(syntax):
+
+                compatible_indexes.append(index)
+
+    else:
+
+        for index, syntax in enumerate(candidate_syntax):
+
+            if not syntax:
                 compatible_indexes.append(index)
 
     if compatible_indexes:
