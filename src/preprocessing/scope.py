@@ -44,7 +44,7 @@ def load_scope():
 PYTHON_SCOPE = load_scope()
 
 
-def extract_python_terms(question):
+def extract_python_terms(question: str):
 
     normalized_question = normalize_for_comparison(question)
 
@@ -66,38 +66,39 @@ def extract_python_terms(question):
     return sorted(set(found_terms))
 
 
-def extract_question(text: str) -> str:
+def split_text_parts(text: str):
 
     text = normalize(text)
 
-    parts = re.split(
+    if not text:
+        return []
+
+    sentences = re.split(
         r"(?<=[.!?])\s+",
         text
     )
 
-    parts = [
-        part.strip()
-        for part in parts
-        if part.strip()
-    ]
+    parts = []
 
-    question_index = None
+    for sentence in sentences:
 
-    for i, part in enumerate(parts):
+        sentence = sentence.strip()
 
-        if "?" in part:
-            question_index = i
-            break
+        if not sentence:
+            continue
 
-    if question_index is None:
-        return text
+        comma_parts = [
+            part.strip()
+            for part in sentence.split(",")
+            if part.strip()
+        ]
 
-    question = parts[question_index]
+        parts.extend(comma_parts)
 
-    return question
+    return parts
 
 
-def extract_out_of_scope_technologies(question):
+def extract_out_of_scope_technologies(question: str):
 
     normalized_question = normalize_for_comparison(question)
 
@@ -119,14 +120,14 @@ def extract_out_of_scope_technologies(question):
     return sorted(set(found_technologies))
 
 
-def check_scope(question):
+def check_scope(question: str):
 
-    out_of_scope_technologies = extract_out_of_scope_technologies(question)
+    out_of_scope_technologies = (extract_out_of_scope_technologies(question))
 
     return len(out_of_scope_technologies) == 0
 
 
-def query_terms(question):
+def query_terms(question: str):
 
     terms = extract_python_terms(question)
 
@@ -135,4 +136,36 @@ def query_terms(question):
 
     context = " | ".join(terms)
 
-    return f"{context} | Python | {question}"
+    return (
+        f"{context} | Python | {question}"
+    )
+
+
+def get_context_parts(text: str, technical_question: str):
+
+    parts = split_text_parts(text)
+
+    normalized_technical = normalize_for_comparison(technical_question)
+
+    context_parts = []
+
+    for part in parts:
+
+        normalized_part = normalize_for_comparison(part)
+
+        if normalized_part == normalized_technical:
+            break
+
+        context_parts.append(part)
+
+    return context_parts
+
+
+def extract_sentiment_context(text: str, technical_question: str):
+
+    context_parts = get_context_parts(text, technical_question)
+
+    if not context_parts:
+        return ""
+
+    return " ".join(context_parts)
