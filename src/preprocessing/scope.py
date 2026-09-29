@@ -63,7 +63,34 @@ def extract_python_terms(question: str):
         if re.search(pattern, normalized_question):
             found_terms.append(term)
 
-    return sorted(set(found_terms))
+    found_terms = sorted(
+        set(found_terms),
+        key=lambda term: (
+            len(normalize_for_comparison(term).split()),
+            len(normalize_for_comparison(term))
+        ),
+        reverse=True
+    )
+
+    selected_terms = []
+
+    for term in found_terms:
+
+        normalized_term = normalize_for_comparison(term)
+
+        if any(
+            re.search(
+                r"(?<!\w)"
+                + re.escape(normalized_term)
+                + r"(?!\w)",
+                normalize_for_comparison(selected_term)
+            )
+            for selected_term in selected_terms):
+            continue
+
+        selected_terms.append(term)
+
+    return selected_terms
 
 
 def split_text_parts(text: str):
@@ -145,16 +172,16 @@ def get_context_parts(text: str, technical_question: str):
 
     parts = split_text_parts(text)
 
-    normalized_technical = normalize_for_comparison(technical_question)
+    normalized_technical = (normalize_for_comparison(technical_question))
 
     context_parts = []
 
     for part in parts:
 
-        normalized_part = normalize_for_comparison(part)
+        normalized_part = (normalize_for_comparison(part))
 
         if normalized_part == normalized_technical:
-            break
+            continue
 
         context_parts.append(part)
 
