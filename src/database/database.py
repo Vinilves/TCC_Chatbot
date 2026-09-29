@@ -25,6 +25,8 @@ def create_interactions_table(conn: sqlite3.Connection) -> None:
             answer TEXT,
             answer_id INTEGER,
             similarity REAL,
+            sentiment TEXT,
+            sentiment_confidence REAL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -33,7 +35,7 @@ def create_interactions_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, question: str, processed_question: str | None = None, answer: str | None = None, answer_id: int | None = None, similarity: float | None = None) -> None:
+def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, question: str, processed_question: str | None = None, answer: str | None = None, answer_id: int | None = None, similarity: float | None = None, sentiment: str | None = None, sentiment_confidence: float | None = None) -> None:
 
     cursor = conn.cursor()
 
@@ -46,9 +48,11 @@ def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, q
             processed_question,
             answer,
             answer_id,
-            similarity
+            similarity,
+            sentiment,
+            sentiment_confidence
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             session_id,
@@ -57,7 +61,9 @@ def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, q
             processed_question,
             answer,
             answer_id,
-            similarity
+            similarity,
+            sentiment,
+            sentiment_confidence
         )
     )
 
@@ -92,5 +98,3 @@ def search_sqlite(conn: sqlite3.Connection, ids):
     result_map = {row[0]: row for row in results}
 
     return [result_map[i] for i in ids if i in result_map]
-
-
