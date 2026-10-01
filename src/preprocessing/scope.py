@@ -105,24 +105,11 @@ def split_text_parts(text: str):
         text
     )
 
-    parts = []
-
-    for sentence in sentences:
-
-        sentence = sentence.strip()
-
-        if not sentence:
-            continue
-
-        comma_parts = [
-            part.strip()
-            for part in sentence.split(",")
-            if part.strip()
-        ]
-
-        parts.extend(comma_parts)
-
-    return parts
+    return [
+        sentence.strip()
+        for sentence in sentences
+        if sentence.strip()
+    ]
 
 
 def extract_out_of_scope_technologies(question: str):
@@ -166,33 +153,3 @@ def query_terms(question: str):
     return (
         f"{context} | Python | {question}"
     )
-
-
-def get_context_parts(text: str, technical_question: str):
-
-    parts = split_text_parts(text)
-
-    normalized_technical = (normalize_for_comparison(technical_question))
-
-    context_parts = []
-
-    for part in parts:
-
-        normalized_part = (normalize_for_comparison(part))
-
-        if normalized_part == normalized_technical:
-            continue
-
-        context_parts.append(part)
-
-    return context_parts
-
-
-def extract_sentiment_context(text: str, technical_question: str):
-
-    context_parts = get_context_parts(text, technical_question)
-
-    if not context_parts:
-        return ""
-
-    return " ".join(context_parts)

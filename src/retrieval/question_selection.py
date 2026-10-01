@@ -15,38 +15,123 @@ def search_best_similarity(index: faiss.Index, embedding: np.ndarray):
     )
 
 
-def select_best_clause(index: faiss.Index, clauses: list[str], generate_embedding):
+def select_technical_question(index: faiss.Index, text: str, generate_embedding):
 
-    if not clauses:
-        return "", None
+    text = text.strip()
 
-    if len(clauses) == 1:
+    if not text:
+        return "", "", None
 
-        embedding = generate_embedding(clauses[0])
+
+    sentences = [
+        sentence.strip()
+        for sentence in text.split(".")
+        if sentence.strip()
+    ]
+
+
+    if len(sentences) > 1:
+
+        best_sentence = sentences[0]
+        best_similarity = float("-inf")
+
+        for sentence in sentences:
+
+            embedding = generate_embedding(sentence)
+
+            similarity, _ = search_best_similarity(index, embedding)
+
+            if similarity > best_similarity:
+
+                best_similarity = similarity
+                best_sentence = sentence
+
+
+        context = " ".join(
+            sentence
+            for sentence in sentences
+            if sentence != best_sentence
+        ).strip()
+
+        return (best_sentence, context, best_similarity)
+
+
+    sentence = sentences[0] if sentences else text
+
+    comma_parts = [
+        part.strip()
+        for part in sentence.split(",")
+        if part.strip()
+    ]
+
+
+    if len(comma_parts) == 1:
+
+        embedding = generate_embedding(sentence)
 
         similarity, _ = search_best_similarity(index, embedding)
 
-        return clauses[0], similarity
+        return (sentence, "", similarity)
 
-    best_clause = clauses[0]
 
-    best_similarity = float("-inf")
+    candidates = []
 
-    for clause in clauses:
 
-        clause = clause.strip()
+    for part in comma_parts:
 
-        if not clause:
-            continue
-
-        embedding = generate_embedding(clause)
+        embedding = generate_embedding(part)
 
         similarity, _ = search_best_similarity(index, embedding)
 
-        if similarity > best_similarity:
+        candidates.append(
+            {
+                "question": part,
+                "similarity": similarity
+            }
+        )
 
-            best_similarity = similarity
 
-            best_clause = clause
+    for start in range(len(comma_parts)):
 
-    return (best_clause, best_similarity)
+        for end in range(start + 1, len(comma_parts)):
+
+            candidate = ", ".join(
+                comma_parts[start:end + 1]
+            )
+
+            embedding = generate_embedding(candidate)
+
+            similarity, _ = search_best_similarity(index, embedding)
+
+            candidates.append(
+                {
+                    "question": candidate,
+                    "similarity": similarity
+                }
+            )
+
+
+    best_candidate = max(
+        candidates,
+        key=lambda candidate: candidate["similarity"]
+    )
+
+    technical_question = best_candidate["question"]
+
+
+    if technical_question == sentence:
+
+        context = ""
+
+    else:
+
+        remaining = sentence.replace(
+            technical_question,
+            "",
+            1
+        )
+
+        context = remaining.strip(" ,")
+
+
+    return (technical_question, context, best_candidate["similarity"])
