@@ -1,5 +1,6 @@
 import faiss
 import numpy as np
+from src.preprocessing.scope import split_text_parts
 
 
 def search_best_similarity(index: faiss.Index, embedding: np.ndarray):
@@ -23,11 +24,7 @@ def select_technical_question(index: faiss.Index, text: str, generate_embedding)
         return "", "", None
 
 
-    sentences = [
-        sentence.strip()
-        for sentence in text.split(".")
-        if sentence.strip()
-    ]
+    sentences = split_text_parts(text)
 
 
     if len(sentences) > 1:
