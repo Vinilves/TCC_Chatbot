@@ -12,117 +12,122 @@ PYTHON_SYNTAX_PATTERN = (
 )
 
 
-def normalize_for_bm25(text: str) -> str:
+def normalize_for_bm25(text):
+    
+    text = text.lower()
 
-    text = text.lower().strip()
-
-    text = unicodedata.normalize(
-        "NFD",
-        text
-    )
-
+    text = unicodedata.normalize("NFD", text)
     text = "".join(
-        character
-        for character in text
-        if unicodedata.category(character) != "Mn"
+        char
+        for char in text
+        if unicodedata.category(char) != "Mn"
     )
 
-    text = re.sub(
-        r"\s+",
-        " ",
-        text
-    )
+    text = re.sub(r"[^\w\s]", " ", text)
 
     return text
 
 
-def extract_python_syntax(text: str):
+def extract_python_syntax(text):
 
-    return re.findall(
-        PYTHON_SYNTAX_PATTERN,
-        text
-    )
+    return re.findall(PYTHON_SYNTAX_PATTERN, text)
 
 
-def tokenize_for_bm25(text: str, python_terms=None):
-
+def tokenize_for_bm25(text):
+    
     text = normalize_for_bm25(text)
 
-    if python_terms:
+    tokens = text.split()
 
-        normalized_terms = sorted(
-            (
-                normalize_for_bm25(term)
-                for term in python_terms
-                if term
-            ),
-            key=len,
-            reverse=True
-        )
-
-        for term in normalized_terms:
-
-            tokenized_term = term.replace(
-                " ",
-                "_"
-            )
-
-            pattern = (
-                r"(?<!\w)"
-                + re.escape(term)
-                + r"(?!\w)"
-            )
-
-            text = re.sub(
-                pattern,
-                tokenized_term,
-                text
-            )
-
-    python_syntax = extract_python_syntax(text)
-
-    text_without_syntax = re.sub(
-        PYTHON_SYNTAX_PATTERN,
-        " ",
-        text
-    )
-
-    tokens = re.findall(
-        r"\b\w+\b",
-        text_without_syntax
-    )
-
-    tokens = [
+    return [
         token
         for token in tokens
         if token not in STOPWORDS_PT
     ]
 
-    tokens.extend(python_syntax)
-
-    return tokens
-
 
 def normalize_scores(scores):
-
-    scores = [
-        float(score)
-        for score in scores
-    ]
-
+    
     if not scores:
         return []
 
-    min_score = min(scores)
-    max_score = max(scores)
+    minimum = min(scores)
+    maximum = max(scores)
 
-    if max_score == min_score:
+    if maximum == minimum:
         return [1.0 for _ in scores]
 
     return [
-        (score - min_score) / (max_score - min_score)
+        (score - minimum) / (maximum - minimum)
         for score in scores
     ]
+
+
+def calculate_lexical_overlap(query, candidate):
+    
+    query_tokens = set(tokenize_for_bm25(query))
+    candidate_tokens = set(tokenize_for_bm25(candidate))
+
+    if not query_tokens:
+        return 0.0
+
+    return len(query_tokens & candidate_tokens) / len(query_tokens)
+
+
+def calculate_python_term_overlap(query_terms, candidate_terms):
+    
+    if not query_terms:
+        return 0.0
+
+    query_terms_set = set(query_terms)
+    candidate_terms_set = set(candidate_terms)
+
+    matched_terms = (
+        query_terms_set & candidate_terms_set
+    )
+
+    return len(matched_terms) / len(query_terms_set)
+
+
+def calculate_python_term_specificity(query_terms, candidate_terms):
+    
+    if not candidate_terms:
+        return 0.0
+
+    query_terms_set = set(query_terms)
+    candidate_terms_set = set(candidate_terms)
+
+    matched_terms = (
+        query_terms_set & candidate_terms_set
+    )
+
+    if not matched_terms:
+        return 0.0
+
+    return len(matched_terms) / len(candidate_terms_set)
+
+
+def calculate_python_syntax_overlap(query, candidate):
+    
+    query_syntax = set(extract_python_syntax(query))
+
+    candidate_syntax = set(extract_python_syntax(candidate))
+
+    if not query_syntax:
+        return 0.0
+
+    return len(query_syntax & candidate_syntax) / len(query_syntax)
+
+
+def has_full_python_term_match(query_terms, candidate_terms):
+    
+    if not query_terms:
+        return False
+
+    query_terms_set = set(query_terms)
+    candidate_terms_set = set(candidate_terms)
+
+    return query_terms_set.issubset(candidate_terms_set)
 
 
 def rerank_candidates(question, candidates, similarities):
@@ -130,97 +135,108 @@ def rerank_candidates(question, candidates, similarities):
     if not candidates:
         return []
 
-    question_terms = extract_python_terms(question)
+    query_terms = extract_python_terms(question)
 
-    question_tokens = tokenize_for_bm25(question, question_terms)
-
-    question_syntax = set(extract_python_syntax(question))
-
-    corpus = []
-
-    candidate_syntax = []
-
-    for candidate in candidates:
-
-        candidate_question = candidate[1]
-
-        candidate_terms = extract_python_terms(candidate_question)
-
-        candidate_tokens = tokenize_for_bm25(candidate_question, candidate_terms)
-
-        corpus.append(candidate_tokens)
-
-        candidate_syntax.append(
-            set(
-                extract_python_syntax(
-                    candidate_question
-                )
-            )
-        )
-
-    bm25 = BM25Okapi(corpus)
-
-    bm25_scores = bm25.get_scores(question_tokens)
-
-    semantic_scores = [
-        float(score)
-        for score in similarities
+    candidate_terms = [
+        extract_python_terms(candidate[1])
+        for candidate in candidates
     ]
 
-    lexical_scores = normalize_scores(bm25_scores)
+    lexical_scores = []
 
-    compatible_indexes = []
+    tokenized_candidates = [
+        tokenize_for_bm25(candidate[1])
+        for candidate in candidates
+    ]
 
-    if question_syntax:
+    query_tokens = tokenize_for_bm25(question)
 
-        for index, syntax in enumerate(candidate_syntax):
+    if query_tokens:
 
-            if question_syntax.intersection(syntax):
+        bm25 = BM25Okapi(tokenized_candidates)
 
-                compatible_indexes.append(index)
+        lexical_scores = bm25.get_scores(
+            query_tokens
+        ).tolist()
 
-    else:
-
-        for index, syntax in enumerate(candidate_syntax):
-
-            if not syntax:
-                compatible_indexes.append(index)
-
-    if compatible_indexes:
-
-        ranking_indexes = compatible_indexes
-
-    else:
-
-        ranking_indexes = list(
-            range(len(candidates))
+        lexical_scores = normalize_scores(
+            lexical_scores
         )
+
+    else:
+
+        lexical_scores = [
+            0.0
+            for _ in candidates
+        ]
+
+    python_term_overlap_scores = [
+        calculate_python_term_overlap(
+            query_terms,
+            terms
+        )
+        for terms in candidate_terms
+    ]
+
+    python_term_specificity_scores = [
+        calculate_python_term_specificity(
+            query_terms,
+            terms
+        )
+        for terms in candidate_terms
+    ]
+
+    python_syntax_overlap_scores = [
+        calculate_python_syntax_overlap(
+            question,
+            candidate[1]
+        )
+        for candidate in candidates
+    ]
+
+    full_term_match_scores = [
+        has_full_python_term_match(
+            query_terms,
+            terms
+        )
+        for terms in candidate_terms
+    ]
+
+    ranking_indices = list(
+        range(len(candidates))
+    )
+
+    ranking_indices.sort(
+        key=lambda index: (
+            full_term_match_scores[index],
+            python_term_overlap_scores[index],
+            python_term_specificity_scores[index],
+            similarities[index],
+            python_syntax_overlap_scores[index],
+            lexical_scores[index],
+        ),
+        reverse=True,
+    )
 
     results = []
 
-    for index in ranking_indexes:
+    for index in ranking_indices:
 
         candidate = candidates[index]
 
-        semantic_score = semantic_scores[index]
+        semantic_similarity = similarities[index]
 
-        lexical_score = lexical_scores[index]
-
-        original_similarity = similarities[index]
-
-        final_score = (0.5 * semantic_score + 0.5 * lexical_score)
+        lexical_overlap = calculate_lexical_overlap(
+            question,
+            candidate[1]
+        )
 
         results.append(
             (
-                float(final_score),
-                float(original_similarity),
-                candidate
+                semantic_similarity,
+                lexical_overlap,
+                candidate,
             )
         )
-
-    results.sort(
-        key=lambda x: x[0],
-        reverse=True
-    )
 
     return results
