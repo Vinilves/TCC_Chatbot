@@ -4,11 +4,15 @@ from src.preprocessing.normalizer import normalize
 from src.reranking.reranking import rerank_candidates
 from src.models.translation.translation import translate_response as translate_answer
 from src.retrieval.retrieval import load_index, search_answers as search_faiss
-from src.preprocessing.scope import check_scope, extract_question, query_terms
+from src.retrieval.question_selection import select_technical_question
+from src.preprocessing.scope import check_scope, query_terms
 from src.database.database import (connect, create_interactions_table, register_interaction, search_sqlite)
 
 
 SIMILARITY_THRESHOLD = 0.65
+
+LEXICAL_OVERLAP_THRESHOLD = 0.20
+
 
 OUT_OF_SCOPE_MESSAGE = (
     "Desculpe, fui desenvolvido para auxiliar no ensino de programação em Python. "
@@ -20,6 +24,17 @@ index = load_index()
 conn = connect()
 
 create_interactions_table(conn)
+
+
+def get_effective_question(question: str):
+
+    (effective_question, _, _) = select_technical_question(
+        index=index,
+        text=question,
+        generate_embedding=generate_embedding
+    )
+
+    return effective_question
 
 
 def to_respond(question: str, session_id: str):
@@ -66,7 +81,7 @@ def to_respond(question: str, session_id: str):
 
     processed_question = normalize(question)
 
-    effective_question = extract_question(processed_question)
+    effective_question = get_effective_question(processed_question)
 
     enriched_question = query_terms(effective_question)
 
@@ -131,17 +146,8 @@ def to_respond(question: str, session_id: str):
         similarities
     )
 
-    best_score, best_similarity, best_candidate = ranked_candidates[0]
 
-    record_id = best_candidate[0]
-    found_question = best_candidate[1]
-    original_answer = best_candidate[2]
-    code = best_candidate[3]
-    source = best_candidate[4]
-    language = best_candidate[5]
-
-
-    if best_similarity < SIMILARITY_THRESHOLD:
+    if not ranked_candidates:
 
         register_interaction(
             conn=conn,
@@ -151,7 +157,55 @@ def to_respond(question: str, session_id: str):
             processed_question=processed_question,
             answer=OUT_OF_SCOPE_MESSAGE,
             answer_id=None,
-            similarity=best_similarity
+            similarity=None
+        )
+
+        return {
+            "session_id": session_id,
+            "answer": OUT_OF_SCOPE_MESSAGE
+        }
+
+
+    best_semantic_similarity, best_lexical_overlap, best_candidate = ranked_candidates[0]
+
+    record_id = best_candidate[0]
+    found_question = best_candidate[1]
+    original_answer = best_candidate[2]
+    code = best_candidate[3]
+    source = best_candidate[4]
+    language = best_candidate[5]
+
+
+    if best_semantic_similarity < SIMILARITY_THRESHOLD:
+
+        register_interaction(
+            conn=conn,
+            session_id=session_id,
+            mode="base",
+            question=question,
+            processed_question=processed_question,
+            answer=OUT_OF_SCOPE_MESSAGE,
+            answer_id=None,
+            similarity=best_semantic_similarity
+        )
+
+        return {
+            "session_id": session_id,
+            "answer": OUT_OF_SCOPE_MESSAGE
+        }
+
+
+    if best_lexical_overlap < LEXICAL_OVERLAP_THRESHOLD:
+
+        register_interaction(
+            conn=conn,
+            session_id=session_id,
+            mode="base",
+            question=question,
+            processed_question=processed_question,
+            answer=OUT_OF_SCOPE_MESSAGE,
+            answer_id=None,
+            similarity=best_semantic_similarity
         )
 
         return {
@@ -181,7 +235,7 @@ def to_respond(question: str, session_id: str):
         processed_question=processed_question,
         answer=final_answer,
         answer_id=record_id,
-        similarity=best_similarity
+        similarity=best_semantic_similarity
     )
 
     return {
@@ -192,6 +246,5 @@ def to_respond(question: str, session_id: str):
         "code": code,
         "source": source,
         "language": language,
-        "similarity": best_similarity,
-        "reranking_score": best_score
+        "similarity": best_semantic_similarity
     }
