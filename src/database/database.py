@@ -1,24 +1,22 @@
-from pathlib import Path
-import sqlite3
+import os
+import psycopg
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-DATABASE_PATH = BASE_DIR / "data" / "sqlite" / "banco_respostas.sqlite"
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 
-def connect() -> sqlite3.Connection:
-    return sqlite3.connect(DATABASE_PATH)
+def connect() -> psycopg.Connection:
+    return psycopg.connect(DATABASE_URL)
 
 
-def create_interactions_table(conn: sqlite3.Connection) -> None:
+def create_interactions_table(conn: psycopg.Connection) -> None:
 
     cursor = conn.cursor()
 
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS interactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
+            id BIGSERIAL PRIMARY KEY,
+            session_id UUID NOT NULL,
             mode TEXT NOT NULL,
             question TEXT NOT NULL,
             processed_question TEXT,
@@ -27,7 +25,8 @@ def create_interactions_table(conn: sqlite3.Connection) -> None:
             similarity REAL,
             sentiment TEXT,
             sentiment_confidence REAL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (answer_id) REFERENCES answers(id)
         )
         """
     )
@@ -35,7 +34,7 @@ def create_interactions_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, question: str, processed_question: str | None = None, answer: str | None = None, answer_id: int | None = None, similarity: float | None = None, sentiment: str | None = None, sentiment_confidence: float | None = None) -> None:
+def register_interaction(conn: psycopg.Connection, session_id: str, mode: str, question: str, processed_question: str | None = None, answer: str | None = None, answer_id: int | None = None, similarity: float | None = None, sentiment: str | None = None, sentiment_confidence: float | None = None) -> None:
 
     cursor = conn.cursor()
 
@@ -52,7 +51,7 @@ def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, q
             sentiment,
             sentiment_confidence
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             session_id,
@@ -70,13 +69,14 @@ def register_interaction(conn: sqlite3.Connection, session_id: str, mode: str, q
     conn.commit()
 
 
-def search_sqlite(conn: sqlite3.Connection, ids):
+def search_answers(conn: psycopg.Connection, ids):
+    
     cursor = conn.cursor()
 
     if len(ids) == 0:
         return []
 
-    placeholders = ",".join("?" * len(ids))
+    placeholders = ",".join(["%s"] * len(ids))
 
     cursor.execute(
         f"""
