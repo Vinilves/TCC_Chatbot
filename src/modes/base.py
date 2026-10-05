@@ -6,7 +6,7 @@ from src.models.translation.translation import translate_response as translate_a
 from src.retrieval.retrieval import load_index, search_answers as search_faiss
 from src.retrieval.question_selection import select_technical_question
 from src.preprocessing.scope import check_scope, query_terms
-from src.database.database import (connect, create_interactions_table, register_interaction, search_sqlite)
+from src.database.database import (connect, create_interactions_table, register_interaction, search_answers)
 
 
 SIMILARITY_THRESHOLD = 0.65
@@ -116,7 +116,7 @@ def to_respond(question: str, session_id: str):
         }
 
 
-    answers = search_sqlite(
+    answers = search_answers(
         conn,
         ids
     )
