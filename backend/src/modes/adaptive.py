@@ -5,10 +5,10 @@ from backend.src.rules.adaptation import adapt_answer
 from backend.src.preprocessing.normalizer import normalize
 from backend.src.retrieval.question_selection import select_technical_question
 from backend.src.reranking.reranking import rerank_candidates
-from backend.src.models.translation.translation import translate_response as translate_answer
+from backend.src.models.translation.translation import (translate_response as translate_answer)
 from backend.src.preprocessing.scope import check_scope, query_terms
-from backend.src.retrieval.retrieval import load_index, search_answers as search_faiss
-from backend.src.database.database import (connect, create_interactions_table, register_interaction, search_answers)
+from backend.src.retrieval.retrieval import (load_index, search_answers as search_faiss)
+from backend.src.database.database import register_interaction, search_answers
 
 
 SIMILARITY_THRESHOLD = 0.65
@@ -23,9 +23,6 @@ OUT_OF_SCOPE_MESSAGE = (
 
 
 index = load_index()
-conn = connect()
-
-create_interactions_table(conn)
 
 
 def get_effective_question(question: str):
@@ -37,51 +34,50 @@ def get_effective_question(question: str):
     )
 
 
-def to_respond(question: str, session_id: str):
+def to_respond(question: str, session_id: str, include_debug: bool = False):
+    
+    def build_response(answer: str, sentiment: str | None = None, confidence: float | None = None, **extra):
+        response = {
+            "session_id": session_id,
+            "answer": answer,
+            **extra,
+        }
+
+        if include_debug and sentiment is not None:
+            response["debug"] = {
+                "sentiment": sentiment,
+                "sentiment_confidence": (
+                    float(confidence)
+                    if confidence is not None
+                    else None
+                )
+            }
+
+        return response
 
     found, answer = check_rules(question)
 
     if found:
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
-            processed_question=None,
             answer=answer,
-            answer_id=None,
-            similarity=None,
-            sentiment=None,
-            sentiment_confidence=None
         )
 
-        return {
-            "session_id": session_id,
-            "answer": answer
-        }
-
+        return build_response(answer)
 
     if not check_scope(question):
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
-            processed_question=None,
             answer=OUT_OF_SCOPE_MESSAGE,
-            answer_id=None,
-            similarity=None,
-            sentiment=None,
-            sentiment_confidence=None
         )
 
-        return {
-            "session_id": session_id,
-            "answer": OUT_OF_SCOPE_MESSAGE
-        }
-
+        return build_response(OUT_OF_SCOPE_MESSAGE)
 
     processed_question = normalize(question)
 
@@ -113,58 +109,43 @@ def to_respond(question: str, session_id: str):
     similarities = distances[0]
     ids = ids[0]
 
-
     if len(similarities) == 0:
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
             processed_question=processed_question,
             answer=OUT_OF_SCOPE_MESSAGE,
-            answer_id=None,
-            similarity=None,
             sentiment=sentiment,
             sentiment_confidence=confidence
         )
 
-        return {
-            "session_id": session_id,
-            "answer": OUT_OF_SCOPE_MESSAGE,
-            "sentiment": sentiment,
-            "sentiment_confidence": confidence
-        }
+        return build_response(
+            OUT_OF_SCOPE_MESSAGE,
+            sentiment,
+            confidence
+        )
 
-
-    answers = search_answers(
-        conn,
-        ids
-    )
-
+    answers = search_answers(ids)
 
     if not answers:
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
             processed_question=processed_question,
             answer=OUT_OF_SCOPE_MESSAGE,
-            answer_id=None,
-            similarity=None,
             sentiment=sentiment,
             sentiment_confidence=confidence
         )
 
-        return {
-            "session_id": session_id,
-            "answer": OUT_OF_SCOPE_MESSAGE,
-            "sentiment": sentiment,
-            "sentiment_confidence": confidence
-        }
-
+        return build_response(
+            OUT_OF_SCOPE_MESSAGE,
+            sentiment,
+            confidence
+        )
 
     ranked_candidates = rerank_candidates(
         effective_question,
@@ -172,29 +153,23 @@ def to_respond(question: str, session_id: str):
         similarities
     )
 
-
     if not ranked_candidates:
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
             processed_question=processed_question,
             answer=OUT_OF_SCOPE_MESSAGE,
-            answer_id=None,
-            similarity=None,
             sentiment=sentiment,
             sentiment_confidence=confidence
         )
 
-        return {
-            "session_id": session_id,
-            "answer": OUT_OF_SCOPE_MESSAGE,
-            "sentiment": sentiment,
-            "sentiment_confidence": confidence
-        }
-
+        return build_response(
+            OUT_OF_SCOPE_MESSAGE,
+            sentiment,
+            confidence
+        )
 
     best_semantic_similarity, best_lexical_overlap, best_candidate = ranked_candidates[0]
 
@@ -205,52 +180,43 @@ def to_respond(question: str, session_id: str):
     source = best_candidate[4]
     language = best_candidate[5]
 
-
     if best_semantic_similarity < SIMILARITY_THRESHOLD:
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
             processed_question=processed_question,
             answer=OUT_OF_SCOPE_MESSAGE,
-            answer_id=None,
-            similarity=best_semantic_similarity,
+            similarity=float(best_semantic_similarity),
             sentiment=sentiment,
             sentiment_confidence=confidence
         )
 
-        return {
-            "session_id": session_id,
-            "answer": OUT_OF_SCOPE_MESSAGE,
-            "sentiment": sentiment,
-            "sentiment_confidence": confidence
-        }
-
+        return build_response(
+            OUT_OF_SCOPE_MESSAGE,
+            sentiment,
+            confidence,
+        )
 
     if best_lexical_overlap < LEXICAL_OVERLAP_THRESHOLD:
 
         register_interaction(
-            conn=conn,
             session_id=session_id,
             mode="adaptive",
             question=question,
             processed_question=processed_question,
             answer=OUT_OF_SCOPE_MESSAGE,
-            answer_id=None,
-            similarity=best_semantic_similarity,
+            similarity=float(best_semantic_similarity),
             sentiment=sentiment,
             sentiment_confidence=confidence
         )
 
-        return {
-            "session_id": session_id,
-            "answer": OUT_OF_SCOPE_MESSAGE,
-            "sentiment": sentiment,
-            "sentiment_confidence": confidence
-        }
-
+        return build_response(
+            OUT_OF_SCOPE_MESSAGE,
+            sentiment,
+            confidence
+        )
 
     if language == "pt":
 
@@ -269,29 +235,30 @@ def to_respond(question: str, session_id: str):
 
 
     register_interaction(
-        conn=conn,
         session_id=session_id,
         mode="adaptive",
         question=question,
         processed_question=processed_question,
         answer=final_answer,
         answer_id=record_id,
-        similarity=best_semantic_similarity,
+        similarity=float(best_semantic_similarity),
         sentiment=sentiment,
         sentiment_confidence=confidence
     )
 
-
-    return {
-        "session_id": session_id,
-        "id": record_id,
-        "question": found_question,
-        "answer": final_answer,
-        "code": code,
-        "source": source,
-        "language": language,
-        "similarity": best_semantic_similarity,
-        "technical_similarity": technical_similarity,
-        "sentiment": sentiment,
-        "sentiment_confidence": confidence
-    }
+    return build_response(
+        final_answer,
+        sentiment,
+        confidence,
+        id=record_id,
+        question=found_question,
+        code=code,
+        source=source,
+        language=language,
+        similarity=float(best_semantic_similarity),
+        technical_similarity=(
+            float(technical_similarity)
+            if technical_similarity is not None
+            else None
+        )
+    )
