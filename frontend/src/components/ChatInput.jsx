@@ -1,8 +1,7 @@
-
 import VersionSelector from "./VersionSelector";
 
 function ChatInput({version, sessionActive, isLoading, onVersionChange, onSendMessage,}) {
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const input = event.currentTarget.elements.message;
@@ -12,8 +11,10 @@ function ChatInput({version, sessionActive, isLoading, onVersionChange, onSendMe
       return;
     }
 
-    onSendMessage(message);
-    input.value = "";
+    const success = await onSendMessage(message);
+    if (success) {
+      input.value = "";
+    }
   }
 
   return (
