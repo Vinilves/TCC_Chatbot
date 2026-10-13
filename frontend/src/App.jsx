@@ -100,13 +100,12 @@ function App() {
 
   async function handleSendMessage(messageText) {
     if (!selectedVersion || isLoading || isEndingSession) {
-      return;
+      return false;
     }
 
     setIsLoading(true);
 
     let currentSessionId = sessionId;
-    let sessionCreated = false;
 
     try {
     
@@ -120,8 +119,6 @@ function App() {
             "O backend não retornou o identificador da sessão."
           );
         }
-
-        sessionCreated = true;
 
         setSessionId(currentSessionId);
         setSessionActive(true);
@@ -161,10 +158,7 @@ function App() {
 
       if (result.documentation_url) {
         answerText += `\n\n[Consulte a documentação oficial do Python](${result.documentation_url})`;
-      } else if (
-        result.id !== undefined &&
-        result.id !== null
-      ) {
+      } else if (result.source) {
         answerText += `\n\n[Consulte a documentação oficial do Python](${PYTHON_DOCUMENTATION_URL})`;
       }
 
@@ -180,16 +174,13 @@ function App() {
               : null,
         },
       ]);
+
+      return true;
     } catch (error) {
       console.error(
         "Erro na comunicação com o chatbot:",
         error
       );
-
-      if (sessionCreated) {
-        setSessionActive(false);
-        setSessionId(null);
-      }
 
       setMessages((previousMessages) => [
         ...previousMessages,
@@ -201,6 +192,8 @@ function App() {
           time: getCurrentTime(),
         },
       ]);
+
+      return false;
     } finally {
       setIsLoading(false);
     }
