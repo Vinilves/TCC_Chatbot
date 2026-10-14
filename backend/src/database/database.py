@@ -64,7 +64,6 @@ def create_interactions_table() -> None:
                 CREATE TABLE IF NOT EXISTS interactions (
                     id BIGSERIAL PRIMARY KEY,
                     session_id UUID NOT NULL,
-                    mode TEXT NOT NULL CHECK (mode IN ('base', 'adaptive')),
                     question TEXT NOT NULL,
                     processed_question TEXT,
                     answer TEXT,
@@ -190,7 +189,6 @@ def register_interaction(session_id: str, mode: str, question: str, processed_qu
                 """
                 INSERT INTO interactions (
                     session_id,
-                    mode,
                     question,
                     processed_question,
                     answer,
@@ -199,7 +197,7 @@ def register_interaction(session_id: str, mode: str, question: str, processed_qu
                     sentiment,
                     sentiment_confidence
                 )
-                SELECT s.session_id, s.mode, %s, %s, %s, %s, %s, %s, %s
+                SELECT s.session_id, %s, %s, %s, %s, %s, %s, %s
                 FROM sessions AS s
                 WHERE s.session_id = %s AND s.mode = %s AND s.status = 'active'
                 """,
