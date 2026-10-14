@@ -40,6 +40,16 @@ function formatDuration(totalSeconds) {
 }
 
 function App() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("chatbot-theme") === "dark"
+        ? "dark"
+        : "light";
+    } catch {
+      return "light";
+    }
+  });
+
   const [selectedVersion, setSelectedVersion] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -52,6 +62,21 @@ function App() {
   const [endSessionError, setEndSessionError] = useState("");
   const [isEndingSession, setIsEndingSession] = useState(false);
 
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+
+    try {
+      localStorage.setItem("chatbot-theme", theme);
+    } catch {
+
+    }
+  }, [theme]);
+
+  function handleToggleTheme() {
+    setTheme((currentTheme) =>
+      currentTheme === "light" ? "dark" : "light"
+    );
+  }
 
   useEffect(() => {
     function handleBeforeUnload(event) {
@@ -278,6 +303,8 @@ function App() {
       <Header
         sessionActive={sessionActive}
         onSessionEnd={handleSessionEnd}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       <main className="chat-container">
