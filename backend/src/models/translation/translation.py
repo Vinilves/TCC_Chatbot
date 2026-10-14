@@ -1,9 +1,14 @@
 import re
+from pathlib import Path
+
 import torch
 
 from transformers import MarianTokenizer, AutoModelForSeq2SeqLM
 
-MODEL_NAME = "Helsinki-NLP/opus-mt-en-ROMANCE"
+
+BASE_DIR = Path(__file__).resolve().parents[3]
+MODEL_PATH = BASE_DIR / "template_models" / "translation"
+
 
 device = (
     "cuda"
@@ -13,15 +18,17 @@ device = (
 
 
 print("Carregando modelo de tradução...")
-print("Modelo:", MODEL_NAME)
+print("Diretório:", MODEL_PATH)
 
 
 tokenizer = MarianTokenizer.from_pretrained(
-    MODEL_NAME
+    str(MODEL_PATH),
+    local_files_only=True
 )
 
 model = AutoModelForSeq2SeqLM.from_pretrained(
-    MODEL_NAME
+    str(MODEL_PATH),
+    local_files_only=True
 ).to(device)
 
 model.eval()

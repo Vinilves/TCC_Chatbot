@@ -22,3 +22,5 @@ Thumbs.db
 *.txt
 
 .vscode/
+
+template_models/

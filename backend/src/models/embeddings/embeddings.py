@@ -1,10 +1,17 @@
+from pathlib import Path
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+BASE_DIR = Path(__file__).resolve().parents[3]
+MODEL_PATH = BASE_DIR / "template_models" / "embeddings"
 
-model = SentenceTransformer(MODEL_NAME)
+
+model = SentenceTransformer(
+    str(MODEL_PATH),
+    local_files_only=True
+)
 
 
 def generate_embedding(text: str) -> np.ndarray:
