@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 from time import monotonic
+from uuid import UUID
 
 from dotenv import load_dotenv
 
@@ -13,7 +14,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend.src.database.database import (open_pool, close_pool, create_interactions_table)
+from backend.src.database.database import (open_pool, close_pool, create_tables, register_session, get_session, end_session as finish_session, SessionUnavailableError)
+
 from backend.src.session.session import create_session_id
 from backend.src.modes.base import to_respond as respond_base
 from backend.src.modes.adaptive import to_respond as respond_adaptive
@@ -24,7 +26,7 @@ async def lifespan(app: FastAPI):
     open_pool()
 
     try:
-        create_interactions_table()
+        create_tables()
         yield
     finally:
         close_pool()
@@ -46,8 +48,6 @@ app.add_middleware(
 
 PYTHON_REFERENCE = "https://docs.python.org/pt-br/3/tutorial/"
 
-active_sessions = {}
-
 
 class StartSessionRequest(BaseModel):
     condition: str = Field(pattern="^[AB]$")
@@ -56,6 +56,29 @@ class StartSessionRequest(BaseModel):
 class MessageRequest(BaseModel):
     session_id: str
     question: str = Field(min_length=1, max_length=5000)
+
+
+def parse_session_id(session_id: str) -> str:
+    try:
+        return str(UUID(session_id))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=400,
+            detail="Identificador de sessão inválido.",
+        ) from None
+
+
+def get_condition(mode: str) -> str:
+    if mode == "base":
+        return "A"
+
+    if mode == "adaptive":
+        return "B"
+
+    raise HTTPException(
+        status_code=500,
+        detail="Modo de sessão inválido no banco de dados.",
+    )
 
 
 @app.get("/api/health")
@@ -67,17 +90,18 @@ def health_check():
 def start_session(data: StartSessionRequest):
     session_id = str(create_session_id())
 
-    respond = (
-        respond_base
-        if data.condition == "A"
-        else respond_adaptive
-    )
+    mode = "base" if data.condition == "A" else "adaptive"
 
-    active_sessions[session_id] = {
-        "condition": data.condition,
-        "respond": respond,
-        "started_at": monotonic(),
-    }
+    try:
+        register_session(
+            session_id=session_id,
+            mode=mode,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível iniciar a sessão.",
+        ) from None
 
     return {
         "session_id": session_id,
@@ -87,13 +111,7 @@ def start_session(data: StartSessionRequest):
 
 @app.post("/api/chat/messages")
 def send_message(data: MessageRequest, debug: bool = Query(default=False)):
-    session = active_sessions.get(data.session_id)
-
-    if session is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Sessão não encontrada ou encerrada.",
-        )
+    session_id = parse_session_id(data.session_id)
 
     question = data.question.strip()
 
@@ -103,23 +121,59 @@ def send_message(data: MessageRequest, debug: bool = Query(default=False)):
             detail="A mensagem não pode estar vazia.",
         )
 
-    include_debug = (
-        debug
-        and session["condition"] == "B"
-    )
+    try:
+        session = get_session(session_id)
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível consultar a sessão.",
+        ) from None
+
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Sessão não encontrada.",
+        )
+
+    mode = session[1]
+    status = session[2]
+
+    if status != "active":
+        raise HTTPException(
+            status_code=409,
+            detail="A sessão está encerrada e não aceita novas mensagens.",
+        )
+
+    if mode == "base":
+        respond = respond_base
+    elif mode == "adaptive":
+        respond = respond_adaptive
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Modo de sessão inválido no banco de dados.",
+        )
+
+    include_debug = debug and mode == "adaptive"
 
     try:
         if include_debug:
-            result = session["respond"](
+            result = respond(
                 question=question,
-                session_id=data.session_id,
+                session_id=session_id,
                 include_debug=True,
             )
         else:
-            result = session["respond"](
+            result = respond(
                 question=question,
-                session_id=data.session_id,
+                session_id=session_id,
             )
+
+    except SessionUnavailableError:
+        raise HTTPException(
+            status_code=409,
+            detail="A sessão foi encerrada antes do registro da interação.",
+        ) from None
 
     except Exception:
         raise HTTPException(
@@ -151,24 +205,28 @@ def send_message(data: MessageRequest, debug: bool = Query(default=False)):
 
 @app.post("/api/sessions/{session_id}/end")
 def end_session(session_id: str):
-    session = active_sessions.get(session_id)
+    session_id = parse_session_id(session_id)
 
-    if session is None:
+    try:
+        result = finish_session(session_id)
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível encerrar a sessão.",
+        ) from None
+
+    if result is None:
         raise HTTPException(
             status_code=404,
             detail="Sessão não encontrada ou já encerrada.",
         )
 
-    duration_seconds = max(
-        0,
-        int(monotonic() - session["started_at"]),
-    )
-
-    active_sessions.pop(session_id)
+    mode, duration_seconds = result
 
     return {
         "status": "ended",
         "session_id": session_id,
-        "condition": session["condition"],
+        "condition": get_condition(mode),
         "duration_seconds": duration_seconds,
     }
