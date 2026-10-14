@@ -1,8 +1,11 @@
+from pathlib import Path
+
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
-MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+BASE_DIR = Path(__file__).resolve().parents[3]
+MODEL_PATH = BASE_DIR / "template_models" / "sentiment"
 
 
 device = (
@@ -13,12 +16,18 @@ device = (
 
 
 print("Carregando modelo de sentimento...")
-print("Modelo:", MODEL_NAME)
+print("Diretório:", MODEL_PATH)
 
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+tokenizer = AutoTokenizer.from_pretrained(
+    str(MODEL_PATH),
+    local_files_only=True
+)
 
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME).to(device)
+model = AutoModelForSequenceClassification.from_pretrained(
+    str(MODEL_PATH),
+    local_files_only=True
+).to(device)
 
 model.eval()
 
