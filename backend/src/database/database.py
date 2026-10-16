@@ -20,6 +20,10 @@ class SessionUnavailableError(Exception):
     """Indica que a sessão não está disponível para novas interações."""
 
 
+class SessionSequenceError(Exception):
+    """Indica que a sequência de sessões do participante é inválida."""
+
+
 def open_pool() -> None:
     pool.open(wait=True)
 
@@ -36,6 +40,7 @@ def create_sessions_table() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id UUID PRIMARY KEY,
+                    participant_id UUID NOT NULL,
                     mode TEXT NOT NULL CHECK (mode IN ('base', 'adaptive')),
                     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'interrupted')),
                     started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -51,6 +56,30 @@ def create_sessions_table() -> None:
                         )
                     )
                 )
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_sessions_participant_id
+                ON sessions (participant_id)
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    idx_sessions_participant_mode
+                ON sessions (participant_id, mode)
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    idx_sessions_one_active_per_participant
+                ON sessions (participant_id)
+                WHERE status = 'active'
                 """
             )
 
@@ -92,24 +121,90 @@ def create_tables() -> None:
     create_interactions_table()
 
 
-def register_session(session_id: str, mode: str) -> None:
+def register_session(session_id: str, participant_id: str, mode: str) -> None:
 
     session_uuid = UUID(session_id)
+    participant_uuid = UUID(participant_id)
 
     if mode not in ("base", "adaptive"):
         raise ValueError("Modo de sessão inválido.")
 
     with pool.connection() as conn:
         with conn.cursor() as cursor:
+
+            cursor.execute(
+                """
+                SELECT pg_advisory_xact_lock(
+                    hashtextextended(%s::text, 0)
+                )
+                """,
+                (str(participant_uuid),),
+            )
+
+            cursor.execute(
+                """
+                SELECT mode, status
+                FROM sessions
+                WHERE participant_id = %s
+                ORDER BY started_at, session_id
+                """,
+                (participant_uuid,),
+            )
+
+            existing_sessions = cursor.fetchall()
+
+            if mode == "base":
+                if existing_sessions:
+                    raise SessionSequenceError(
+                        "O participante já possui uma sessão registrada."
+                    )
+
+            else:
+                base_completed = any(
+                    existing_mode == "base"
+                    and existing_status == "completed"
+                    for existing_mode, existing_status in existing_sessions
+                )
+
+                adaptive_exists = any(
+                    existing_mode == "adaptive"
+                    for existing_mode, _ in existing_sessions
+                )
+
+                active_exists = any(
+                    existing_status == "active"
+                    for _, existing_status in existing_sessions
+                )
+
+                if not base_completed:
+                    raise SessionSequenceError(
+                        "A sessão base precisa ser concluída antes da sessão adaptativa."
+                    )
+
+                if adaptive_exists:
+                    raise SessionSequenceError(
+                        "O participante já possui uma sessão adaptativa."
+                    )
+
+                if active_exists:
+                    raise SessionSequenceError(
+                        "O participante possui uma sessão ativa."
+                    )
+
             cursor.execute(
                 """
                 INSERT INTO sessions (
                     session_id,
+                    participant_id,
                     mode
                 )
-                VALUES (%s, %s)
+                VALUES (%s, %s, %s)
                 """,
-                (session_uuid, mode),
+                (
+                    session_uuid,
+                    participant_uuid,
+                    mode,
+                ),
             )
 
 
@@ -123,6 +218,7 @@ def get_session(session_id: str) -> tuple | None:
                 """
                 SELECT
                     session_id,
+                    participant_id,
                     mode,
                     status,
                     started_at,
@@ -164,11 +260,12 @@ def end_session(session_id: str, status: str = "completed") -> tuple | None:
                             )
                         )::INTEGER
                     )
-
-                WHERE session_id = %s
-                  AND status = 'active'
-
-                RETURNING mode, duration_seconds
+                WHERE session_id = %s AND status = 'active'
+                RETURNING
+                    participant_id,
+                    mode,
+                    status,
+                    duration_seconds
                 """,
                 (status, session_uuid),
             )
