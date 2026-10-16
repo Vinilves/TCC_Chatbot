@@ -17,6 +17,49 @@ const PYTHON_DOCUMENTATION_URL =
 const DEBUG_MODE =
   new URLSearchParams(window.location.search).get("debug") === "true";
 
+const PARTICIPANT_ID_KEY = "chatbot-participant-id";
+const BASE_COMPLETED_KEY = "chatbot-base-completed";
+const EXPERIMENT_COMPLETED_KEY = "chatbot-experiment-completed";
+
+function createParticipantId() {
+  if (
+    typeof crypto === "undefined" ||
+    typeof crypto.randomUUID !== "function"
+  ) {
+    throw new Error(
+      "Não foi possível gerar o identificador anônimo do participante."
+    );
+  }
+
+  return crypto.randomUUID();
+}
+
+function getStoredValue(key, fallback = "") {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getOrCreateParticipantId() {
+  try {
+    const storedId = localStorage.getItem(PARTICIPANT_ID_KEY);
+
+    if (storedId) {
+      return storedId;
+    }
+
+    const participantId = createParticipantId();
+
+    localStorage.setItem(PARTICIPANT_ID_KEY, participantId);
+
+    return participantId;
+  } catch {
+    return createParticipantId();
+  }
+}
+
 function getCurrentTime() {
   return `Hoje ${new Date().toLocaleTimeString("pt-BR", {
     hour: "2-digit",
@@ -50,7 +93,20 @@ function App() {
     }
   });
 
+  const [participantId, setParticipantId] = useState(() =>
+    getOrCreateParticipantId()
+  );
+
+  const [baseCompleted, setBaseCompleted] = useState(
+    () => getStoredValue(BASE_COMPLETED_KEY) === "true"
+  );
+
+  const [experimentCompleted, setExperimentCompleted] = useState(
+    () => getStoredValue(EXPERIMENT_COMPLETED_KEY) === "true"
+  );
+
   const [selectedVersion, setSelectedVersion] = useState("");
+  const [completedVersion, setCompletedVersion] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -72,11 +128,21 @@ function App() {
     }
   }, [theme]);
 
-  function handleToggleTheme() {
-    setTheme((currentTheme) =>
-      currentTheme === "light" ? "dark" : "light"
-    );
-  }
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        BASE_COMPLETED_KEY,
+        String(baseCompleted)
+      );
+
+      localStorage.setItem(
+        EXPERIMENT_COMPLETED_KEY,
+        String(experimentCompleted)
+      );
+    } catch {
+
+    }
+  }, [baseCompleted, experimentCompleted]);
 
   useEffect(() => {
     function handleBeforeUnload(event) {
@@ -89,7 +155,10 @@ function App() {
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener(
+        "beforeunload",
+        handleBeforeUnload
+      );
     };
   }, [sessionActive]);
 
@@ -112,10 +181,33 @@ function App() {
     return () => {
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [showEndConfirmation, showSessionSummary, isEndingSession]);
+  }, [
+    showEndConfirmation,
+    showSessionSummary,
+    isEndingSession,
+  ]);
+
+  function handleToggleTheme() {
+    setTheme((currentTheme) =>
+      currentTheme === "light" ? "dark" : "light"
+    );
+  }
 
   function handleVersionChange(version) {
-    if (sessionActive || isLoading || isEndingSession) {
+    if (
+      sessionActive ||
+      isLoading ||
+      isEndingSession ||
+      experimentCompleted
+    ) {
+      return;
+    }
+
+    if (baseCompleted && version !== "B") {
+      return;
+    }
+
+    if (!baseCompleted && version !== "A") {
       return;
     }
 
@@ -124,7 +216,20 @@ function App() {
 
 
   async function handleSendMessage(messageText) {
-    if (!selectedVersion || isLoading || isEndingSession) {
+    if (
+      !selectedVersion ||
+      isLoading ||
+      isEndingSession ||
+      experimentCompleted
+    ) {
+      return false;
+    }
+
+    if (baseCompleted && selectedVersion !== "B") {
+      return false;
+    }
+
+    if (!baseCompleted && selectedVersion !== "A") {
       return false;
     }
 
@@ -135,7 +240,10 @@ function App() {
     try {
     
       if (!currentSessionId) {
-        const session = await startSession(selectedVersion);
+        const session = await startSession(
+          participantId,
+          selectedVersion
+        );
 
         currentSessionId = session.session_id;
 
@@ -263,7 +371,7 @@ function App() {
 
       if (
         !result ||
-        result.status !== "ended" ||
+        result.status !== "completed" ||
         typeof result.duration_seconds !== "number"
       ) {
         throw new Error(
@@ -271,11 +379,22 @@ function App() {
         );
       }
 
+      const versionJustCompleted = selectedVersion;
+
+      setCompletedVersion(versionJustCompleted);
       setSessionDuration(result.duration_seconds);
+
       setSessionActive(false);
       setSessionId(null);
       setMessages([]);
-      setSelectedVersion("");
+
+      if (versionJustCompleted === "A") {
+        setBaseCompleted(true);
+        setSelectedVersion("B");
+      } else {
+        setExperimentCompleted(true);
+        setSelectedVersion("");
+      }
 
       setShowEndConfirmation(false);
       setShowSessionSummary(true);
@@ -296,7 +415,35 @@ function App() {
   function handleCloseSummary() {
     setShowSessionSummary(false);
     setSessionDuration(null);
+
+    if (experimentCompleted) {
+      const nextParticipantId = createParticipantId();
+
+      setParticipantId(nextParticipantId);
+      setBaseCompleted(false);
+      setExperimentCompleted(false);
+      setSelectedVersion("");
+      setCompletedVersion("");
+
+      try {
+        localStorage.setItem(
+          PARTICIPANT_ID_KEY,
+          nextParticipantId
+        );
+
+        localStorage.setItem(BASE_COMPLETED_KEY, "false");
+        localStorage.setItem(EXPERIMENT_COMPLETED_KEY, "false");
+      } catch {
+
+      }
+    }
   }
+
+  const isVersionSelectionDisabled =
+    sessionActive ||
+    isLoading ||
+    isEndingSession ||
+    experimentCompleted;
 
   return (
     <div className="app">
@@ -356,7 +503,9 @@ function App() {
 
             <p id="end-session-description">
               Deseja realmente encerrar sua sessão de conversa?
-              Após o encerramento, você poderá iniciar uma nova sessão.
+              {selectedVersion === "A"
+                ? " Após a conclusão, você poderá testar a versão B."
+                : " Após a conclusão, sua participação no experimento será finalizada."}
             </p>
 
             {endSessionError && (
@@ -413,7 +562,9 @@ function App() {
             </h2>
 
             <p id="session-summary-description">
-              Sua sessão foi encerrada com sucesso.
+              {completedVersion === "B"
+                ? "Sua participação no experimento foi concluída."
+                : "A versão A foi concluída. Agora você pode prosseguir para a versão B."}
             </p>
 
             <div className="duration-display">

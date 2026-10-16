@@ -1,7 +1,8 @@
 import api from "./api";
 
-export async function startSession(condition) {
+export async function startSession(participantId, condition) {
   const response = await api.post("/api/sessions", {
+    participant_id: participantId,
     condition,
   });
 
