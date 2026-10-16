@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-from time import monotonic
 from uuid import UUID
 
 from dotenv import load_dotenv
@@ -14,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend.src.database.database import (open_pool, close_pool, create_tables, register_session, get_session, end_session as finish_session, SessionUnavailableError)
+from backend.src.database.database import (open_pool, close_pool, create_tables, register_session, get_session, end_session as finish_session, SessionUnavailableError, SessionSequenceError)
 
 from backend.src.session.session import create_session_id
 from backend.src.modes.base import to_respond as respond_base
@@ -50,6 +49,7 @@ PYTHON_REFERENCE = "https://docs.python.org/pt-br/3/tutorial/"
 
 
 class StartSessionRequest(BaseModel):
+    participant_id: UUID
     condition: str = Field(pattern="^[AB]$")
 
 
@@ -95,8 +95,14 @@ def start_session(data: StartSessionRequest):
     try:
         register_session(
             session_id=session_id,
+            participant_id=str(data.participant_id),
             mode=mode,
         )
+    except SessionSequenceError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from None
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -105,6 +111,7 @@ def start_session(data: StartSessionRequest):
 
     return {
         "session_id": session_id,
+        "participant_id": str(data.participant_id),
         "condition": data.condition,
     }
 
@@ -135,8 +142,8 @@ def send_message(data: MessageRequest, debug: bool = Query(default=False)):
             detail="Sessão não encontrada.",
         )
 
-    mode = session[1]
-    status = session[2]
+    mode = session[2]
+    status = session[3]
 
     if status != "active":
         raise HTTPException(
@@ -222,11 +229,12 @@ def end_session(session_id: str):
             detail="Sessão não encontrada ou já encerrada.",
         )
 
-    mode, duration_seconds = result
+    participant_id, mode, status, duration_seconds = result
 
     return {
-        "status": "ended",
+        "status": status,
         "session_id": session_id,
+        "participant_id": str(participant_id),
         "condition": get_condition(mode),
         "duration_seconds": duration_seconds,
     }
