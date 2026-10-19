@@ -1,34 +1,110 @@
-from scipy.stats import ttest_ind, mannwhitneyu
+import numpy as np
+from scipy.stats import ttest_rel, wilcoxon
 
 
-def calculate_welch_t_test(base_values, adaptive_values) -> dict:
+def _validate_paired_values(base_values, adaptive_values) -> tuple[np.ndarray, np.ndarray]:
+    
+    base_values = np.asarray(
+        base_values,
+        dtype=float,
+    )
 
-    statistic, p_value = ttest_ind(base_values, adaptive_values, equal_var=False, alternative="two-sided")
+    adaptive_values = np.asarray(
+        adaptive_values,
+        dtype=float,
+    )
+
+    if len(base_values) != len(adaptive_values):
+        raise ValueError(
+            "Os grupos devem conter o mesmo número de observações."
+        )
+
+    if len(base_values) < 2:
+        raise ValueError(
+            "São necessários pelo menos dois pares."
+        )
+
+    if not np.all(np.isfinite(base_values)):
+        raise ValueError(
+            "O grupo base contém valores ausentes ou não finitos."
+        )
+
+    if not np.all(np.isfinite(adaptive_values)):
+        raise ValueError(
+            "O grupo adaptive contém valores ausentes ou não finitos."
+        )
+
+    return base_values, adaptive_values
+
+
+def calculate_paired_t_test(base_values, adaptive_values) -> dict:
+    
+    base_values, adaptive_values = _validate_paired_values(
+        base_values,
+        adaptive_values,
+    )
+
+    differences = adaptive_values - base_values
+
+    if np.allclose(differences, 0):
+        return {
+            "test": "Paired t-test",
+            "statistic": 0.0,
+            "p_value": 1.0,
+        }
+
+    statistic, p_value = ttest_rel(
+        adaptive_values,
+        base_values,
+        alternative="two-sided",
+    )
 
     return {
-        "test": "Welch t-test",
-        "statistic": statistic,
-        "p_value": p_value,
+        "test": "Paired t-test",
+        "statistic": float(statistic),
+        "p_value": float(p_value),
     }
 
-def calculate_mann_whitney_test(base_values, adaptive_values) -> dict:
 
-    statistic, p_value = mannwhitneyu(base_values, adaptive_values, alternative="two-sided")
+def calculate_wilcoxon_test(base_values, adaptive_values) -> dict:
+    
+    base_values, adaptive_values = _validate_paired_values(
+        base_values,
+        adaptive_values,
+    )
+
+    differences = adaptive_values - base_values
+
+    if np.allclose(differences, 0):
+        return {
+            "test": "Wilcoxon signed-rank",
+            "statistic": 0.0,
+            "p_value": 1.0,
+        }
+
+    result = wilcoxon(
+        differences,
+        alternative="two-sided",
+        zero_method="wilcox",
+        method="auto",
+    )
 
     return {
-        "test": "Mann-Whitney U",
-        "statistic": statistic,
-        "p_value": p_value,
+        "test": "Wilcoxon signed-rank",
+        "statistic": float(result.statistic),
+        "p_value": float(result.pvalue),
     }
 
-def compare_groups(base_values, adaptive_values, normal_base: bool, normal_adaptive: bool) -> dict:
 
-    if normal_base and normal_adaptive:
+def compare_paired_groups(base_values, adaptive_values, differences_normal: bool) -> dict:
+    
+    if differences_normal:
+        return calculate_paired_t_test(
+            base_values,
+            adaptive_values,
+        )
 
-        result = calculate_welch_t_test(base_values, adaptive_values)
-
-    else:
-
-        result = calculate_mann_whitney_test(base_values, adaptive_values)
-
-    return result
+    return calculate_wilcoxon_test(
+        base_values,
+        adaptive_values,
+    )

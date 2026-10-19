@@ -3,7 +3,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from data.analysis.preparation.preparation import (load_data_in_batches, load_answers, prepare_data,)
+from data.analysis.preparation.preparation import (load_data_in_batches, load_answers, load_sessions, prepare_data,)
 
 from data.analysis.preparation.pipeline import calculate_metrics
 from data.analysis.metrics.thematic_consistency import load_embedding_model
@@ -15,6 +15,10 @@ INTERACTIONS_PATH = Path(
 
 ANSWERS_PATH = Path(
     "data/analysis/raw/answers_snapshot.parquet"
+)
+
+SESSIONS_PATH = Path(
+    "data/analysis/raw/sessions_raw.parquet"
 )
 
 OUTPUT_PATH = Path(
@@ -35,6 +39,10 @@ def main() -> None:
         answers_path=str(ANSWERS_PATH),
     )
 
+    sessions = load_sessions(
+        sessions_path=str(SESSIONS_PATH)
+    )
+
     model = load_embedding_model()
 
     writer = None
@@ -49,6 +57,7 @@ def main() -> None:
             df = prepare_data(
                 interactions=interactions_batch,
                 answers=answers,
+                sessions=sessions
             )
 
             df = calculate_metrics(

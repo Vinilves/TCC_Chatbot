@@ -1,43 +1,64 @@
 import numpy as np
-from scipy.stats import mannwhitneyu
+from scipy.stats import rankdata
 
 
-def calculate_cohens_d(base_values, adaptive_values) -> float:
+def calculate_paired_cohens_dz(base_values, adaptive_values) -> float:
 
     base_values = np.asarray(base_values, dtype=float)
     adaptive_values = np.asarray(adaptive_values, dtype=float)
 
-    n_base = len(base_values)
-    n_adaptive = len(adaptive_values)
+    differences = adaptive_values - base_values
 
-    mean_base = np.mean(base_values)
-    mean_adaptive = np.mean(adaptive_values)
-
-    std_base = np.std(base_values, ddof=1)
-    std_adaptive = np.std(adaptive_values, ddof=1)
-
-    pooled_std = np.sqrt(
-        ((n_base - 1) * std_base**2 + (n_adaptive - 1) * std_adaptive**2) / (n_base + n_adaptive - 2)
-    )
-
-    if pooled_std == 0:
+    if len(differences) < 2:
         return np.nan
 
-    return (mean_adaptive - mean_base) / pooled_std
+    std_difference = np.std(
+        differences,
+        ddof=1,
+    )
+
+    if np.isclose(std_difference, 0):
+        return np.nan
+
+    return float(
+        np.mean(differences) / std_difference
+    )
 
 
-def calculate_rank_biserial(base_values, adaptive_values) -> float:
+def calculate_paired_rank_biserial(base_values, adaptive_values) -> float:
 
     base_values = np.asarray(base_values, dtype=float)
     adaptive_values = np.asarray(adaptive_values, dtype=float)
 
-    n_base = len(base_values)
-    n_adaptive = len(adaptive_values)
+    differences = adaptive_values - base_values
 
-    u_statistic, _ = mannwhitneyu(
-        adaptive_values,
-        base_values,
-        alternative="two-sided",
+    differences = differences[
+        ~np.isclose(differences, 0)
+    ]
+
+    if len(differences) == 0:
+        return np.nan
+
+    ranks = rankdata(
+        np.abs(differences),
+        method="average",
     )
 
-    return ((2 * u_statistic) / (n_adaptive * n_base)) - 1
+    positive_rank_sum = ranks[
+        differences > 0
+    ].sum()
+
+    negative_rank_sum = ranks[
+        differences < 0
+    ].sum()
+
+    total_rank_sum = (
+        positive_rank_sum + negative_rank_sum
+    )
+
+    if total_rank_sum == 0:
+        return np.nan
+
+    return float(
+        (positive_rank_sum - negative_rank_sum) / total_rank_sum
+    )
