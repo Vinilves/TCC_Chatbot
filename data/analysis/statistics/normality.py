@@ -1,42 +1,93 @@
+import warnings
+
+import numpy as np
 import pandas as pd
 from scipy.stats import shapiro
 
 
-def calculate_shapiro_test(df: pd.DataFrame, metrics: list[str], mode_column: str = "mode") -> pd.DataFrame:
+def calculate_paired_normality(paired_df: pd.DataFrame, metrics: list[str]) -> pd.DataFrame:
 
     results = []
 
     for metric in metrics:
+        base_column = f"{metric}_base"
+        adaptive_column = f"{metric}_adaptive"
 
-        for mode in ["base", "adaptive"]:
+        missing_columns = {
+            base_column,
+            adaptive_column,
+        } - set(paired_df.columns)
 
-            values = (
-                df.loc[df[mode_column] == mode, metric]
-                .dropna()
+        if missing_columns:
+            raise ValueError(
+                f"Colunas ausentes para {metric}: "
+                f"{sorted(missing_columns)}"
             )
 
-            n = len(values)
+        valid_pairs = paired_df[
+            [base_column, adaptive_column]
+        ].copy()
 
-            if n < 3:
-                results.append({
-                    "metric": metric,
-                    "mode": mode,
-                    "n": n,
-                    "shapiro_statistic": None,
-                    "shapiro_p_value": None,
-                    "normal": None,
-                })
-                continue
+        valid_pairs = valid_pairs.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        ).dropna()
 
-            statistic, p_value = shapiro(values)
+        differences = (
+            valid_pairs[adaptive_column]
+            - valid_pairs[base_column]
+        ).to_numpy(dtype=float)
 
-            results.append({
-                "metric": metric,
-                "mode": mode,
-                "n": n,
-                "shapiro_statistic": statistic,
-                "shapiro_p_value": p_value,
-                "normal": p_value >= 0.05,
-            })
+        n = len(differences)
+
+        result = {
+            "metric": metric,
+            "n_pairs": n,
+            "statistic": np.nan,
+            "p_value": np.nan,
+            "normal": None,
+            "status": None,
+        }
+
+        if n < 3:
+            result["status"] = (
+                "Não avaliado: menos de três pares."
+            )
+            results.append(result)
+            continue
+
+        if not np.all(np.isfinite(differences)):
+            result["status"] = (
+                "Não avaliado: diferenças não finitas."
+            )
+            results.append(result)
+            continue
+
+        if np.allclose(differences, differences[0]):
+            result["status"] = (
+                "Não avaliado: diferenças constantes."
+            )
+            results.append(result)
+            continue
+
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+
+                statistic, p_value = shapiro(
+                    differences
+                )
+
+            result["statistic"] = float(statistic)
+            result["p_value"] = float(p_value)
+            result["normal"] = bool(p_value >= 0.05)
+            result["status"] = "Avaliado"
+
+        except (ValueError, FloatingPointError) as exc:
+            result["status"] = (
+                f"Erro no teste de normalidade: {exc}"
+            )
+
+        results.append(result)
 
     return pd.DataFrame(results)
