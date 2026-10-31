@@ -1,12 +1,10 @@
-import logo from "../assets/logo.png";
-
 function Header({sessionActive, onSessionEnd, theme, onToggleTheme}) {
   const isDarkTheme = theme === "dark";
 
   return (
     <header className="header">
       <div className="logo-container">
-        <img src={logo} alt="Logo do chatbot" className="logo" />
+        <img src="/logo.png" alt="Logo do chatbot" className="logo" />
       </div>
 
       <div className="header-actions">
