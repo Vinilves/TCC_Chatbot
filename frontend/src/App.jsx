@@ -105,7 +105,20 @@ function App() {
     () => getStoredValue(EXPERIMENT_COMPLETED_KEY) === "true"
   );
 
-  const [selectedVersion, setSelectedVersion] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState(() => {
+    const isExperimentCompleted =
+      getStoredValue(EXPERIMENT_COMPLETED_KEY) === "true";
+
+    const isBaseCompleted =
+      getStoredValue(BASE_COMPLETED_KEY) === "true";
+
+    if (isExperimentCompleted) {
+      return "";
+    }
+
+    return isBaseCompleted ? "B" : "A";
+  });
+
   const [completedVersion, setCompletedVersion] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -192,28 +205,6 @@ function App() {
       currentTheme === "light" ? "dark" : "light"
     );
   }
-
-  function handleVersionChange(version) {
-    if (
-      sessionActive ||
-      isLoading ||
-      isEndingSession ||
-      experimentCompleted
-    ) {
-      return;
-    }
-
-    if (baseCompleted && version !== "B") {
-      return;
-    }
-
-    if (!baseCompleted && version !== "A") {
-      return;
-    }
-
-    setSelectedVersion(version);
-  }
-
 
   async function handleSendMessage(messageText) {
     if (
@@ -422,7 +413,7 @@ function App() {
       setParticipantId(nextParticipantId);
       setBaseCompleted(false);
       setExperimentCompleted(false);
-      setSelectedVersion("");
+      setSelectedVersion("A");
       setCompletedVersion("");
 
       try {
@@ -462,9 +453,7 @@ function App() {
 
         <ChatInput
           version={selectedVersion}
-          sessionActive={sessionActive}
           isLoading={isLoading || isEndingSession}
-          onVersionChange={handleVersionChange}
           onSendMessage={handleSendMessage}
         />
       </main>

@@ -1,6 +1,6 @@
 import VersionSelector from "./VersionSelector";
 
-function ChatInput({version, sessionActive, isLoading, onVersionChange, onSendMessage,}) {
+function ChatInput({version, isLoading, onSendMessage}) {
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -30,8 +30,6 @@ function ChatInput({version, sessionActive, isLoading, onVersionChange, onSendMe
 
       <VersionSelector
         selectedVersion={version}
-        onVersionChange={onVersionChange}
-        disabled={sessionActive || isLoading}
       />
 
       <button
