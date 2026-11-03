@@ -1,17 +1,11 @@
-function VersionSelector({ selectedVersion, onVersionChange, disabled }) {
-  
-  function handleChange(event) {
-    onVersionChange(event.target.value);
-  }
-
+function VersionSelector({ selectedVersion }) {
   return (
     <div className="version-selector">
       <select
         value={selectedVersion || ""}
-        onChange={handleChange}
-        disabled={disabled}
+        disabled
         data-selected={selectedVersion ? "true" : "false"}
-        aria-label="Selecionar versão do chatbot"
+        aria-label="Versão atual do chatbot"
       >
         <option value="" disabled>
           VERSÃO
