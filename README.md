@@ -52,7 +52,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 <br>
 
 <p align="center">
-<img src="images/tela_inicial.png" alt="Tela inicial do chatbot na versão A" width="850">
+<img src="https://github.com/user-attachments/assets/97242b30-e0ed-43b1-b9fc-2fdddf42d7a5" alt="Tela inicial do chatbot na versão A" width="850">
 </p>
 
 <p align="center">
@@ -60,7 +60,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 </p>
 
 <p align="center">
-<img src="images/tela_inicial1.png" alt="Tela inicial do chatbot na versão B" width="850">
+<img src="https://github.com/user-attachments/assets/5d845689-6a7c-4cd8-9ba1-acae0aed235d" alt="Tela inicial do chatbot na versão B" width="850">
 </p>
 
 <p align="center">
@@ -71,7 +71,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 <br>
 
 <p align="center">
-<img src="images/tela_interacao.png" alt="Interação com o chatbot na versão A" width="850">
+<img src="https://github.com/user-attachments/assets/6aa81501-3e28-40e0-9dda-03e550d50e3b" alt="Interação com o chatbot na versão A" width="850">
 </p>
 
 <p align="center">
@@ -79,7 +79,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 </p>
 
 <p align="center">
-<img src="images/tela_interacao1.png" alt="Interação com o chatbot na versão B" width="850">
+<img src="https://github.com/user-attachments/assets/3c5c9378-8b00-41fc-af67-39817253cad9" alt="Interação com o chatbot na versão B" width="850">
 </p>
 
 <p align="center">
@@ -90,7 +90,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 <br>
 
 <p align="center">
-<img src="images/tela_chatbot.png" alt="Resposta apresentada pelo chatbot na versão A" width="850">
+<img src="https://github.com/user-attachments/assets/084e312e-3c73-4b58-81f9-cbf06aaaaa6f" alt="Resposta apresentada pelo chatbot na versão A" width="850">
 </p>
 
 <p align="center">
@@ -98,7 +98,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 </p>
 
 <p align="center">
-<img src="images/tela_chatbot1.png" alt="Resposta apresentada pelo chatbot na versão B" width="850">
+<img src="https://github.com/user-attachments/assets/ab3fc3a1-1823-4032-a938-f320ed89c232" alt="Resposta apresentada pelo chatbot na versão B" width="850">
 </p>
 
 <p align="center">
@@ -109,7 +109,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 <br>
 
 <p align="center">
-<img src="images/tela_sessao.png" alt="Encerramento da sessão na versão A" width="850">
+<img src="https://github.com/user-attachments/assets/3eb3bb7e-a5bd-44a5-87f8-086cfc2e5a51" alt="Encerramento da sessão na versão A" width="850">
 </p>
 
 <p align="center">
@@ -117,7 +117,7 @@ As capturas de tela a seguir apresentam os principais elementos da interface e o
 </p>
 
 <p align="center">
-<img src="images/tela_sessao1.png" alt="Encerramento da sessão na versão B" width="850">
+<img src="https://github.com/user-attachments/assets/da832f4a-f5d7-4e22-aff6-07353de4c00f" alt="Encerramento da sessão na versão B" width="850">
 </p>
 
 <p align="center">
@@ -449,4 +449,4 @@ Trabalho de Conclusão de Curso orientado pelo **Prof. Esp. José Anchieta dos S
 
 ## Licença
 
-Este projeto foi desenvolvido para fins acadêmicos e de pesquisa.
+Este projeto está licenciado sob os termos da licença MIT. Consulte o arquivo [LICENSE](LICENSE) para mais informações.
