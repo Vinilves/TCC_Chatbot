@@ -449,4 +449,4 @@ Trabalho de Conclusão de Curso orientado pelo **Prof. Esp. José Anchieta dos S
 
 ## Licença
 
-Este projeto foi desenvolvido para fins acadêmicos e de pesquisa.
+Este projeto está licenciado sob os termos da licença MIT. Consulte o arquivo [LICENSE](LICENSE) para mais informações.
